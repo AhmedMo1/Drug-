@@ -48,13 +48,21 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
+
+      - name: Configure Gradle Memory & Properties
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> ~/.gradle/gradle.properties
+          echo "android.useAndroidX=true" >> ~/.gradle/gradle.properties
+          echo "android.enableJetifier=true" >> ~/.gradle/gradle.properties
 
       - name: Build Debug APK
         run: |
           cd android
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --info --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
