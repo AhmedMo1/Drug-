@@ -1,0 +1,6 @@
+{
+  "name": "دليل الأدوية المصري - Egyptian Drug Database",
+  "description": "قاعدة بيانات الأدوية المصرية المحدثة (26,500+ دواء) مع بدائل ومثائل الأدوية، أدلة أدوية البالغين (Adult Monographs)، التفاعلات الدوائية، وتنبيهات الأمان المعتمدة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
