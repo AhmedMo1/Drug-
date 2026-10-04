@@ -28,9 +28,19 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - name: Initialize Capacitor Android
+      - name: Create Capacitor JSON Config
         run: |
-          npx cap init "AI Studio App" "com.aistudio.app" --web-dir dist
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.aistudio.app",
+            "appName": "AI Studio App",
+            "webDir": "dist",
+            "bundledWebRuntime": false
+          }
+          EOF
+
+      - name: Add and Sync Android Platform
+        run: |
           npx cap add android
           npx cap sync android
 
