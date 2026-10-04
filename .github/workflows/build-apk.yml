@@ -16,12 +16,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Install Project Dependencies
         run: |
-          npm install --no-package-lock
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install --legacy-peer-deps --no-package-lock
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       - name: Build Web Assets
         run: npm run build
