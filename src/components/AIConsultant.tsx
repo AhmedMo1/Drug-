@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { Drug } from '../types/drug';
 import { 
+  requestAIConsult, 
+  requestPrescriptionAnalysis, 
+  getEffectiveApiKey, 
+  saveUserApiKey, 
+  isStandaloneApp 
+} from '../utils/aiClient';
+import { 
   Bot, 
   Send, 
   Sparkles, 
@@ -11,7 +18,10 @@ import {
   CheckCircle2, 
   HelpCircle,
   Pill,
-  ImageIcon
+  ImageIcon,
+  Key,
+  Check,
+  Smartphone
 } from 'lucide-react';
 
 interface AIConsultantProps {
@@ -35,6 +45,9 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'consult' | 'prescription'>('consult');
   const [inputQuery, setInputQuery] = useState('');
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(getEffectiveApiKey());
+  const [keySavedMessage, setKeySavedMessage] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -58,6 +71,15 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
   const [prescriptionImage, setPrescriptionImage] = useState<string | null>(null);
   const [prescriptionResult, setPrescriptionResult] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+
+  const handleSaveApiKey = () => {
+    saveUserApiKey(apiKeyInput);
+    setKeySavedMessage(true);
+    setTimeout(() => {
+      setKeySavedMessage(false);
+      setShowKeyModal(false);
+    }, 1500);
+  };
 
   // Quick preset questions
   const presetQuestions = [
@@ -84,24 +106,19 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
     setLoading(true);
 
     try {
-      const response = await fetch('/api/ai-consult', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: text,
-          contextDrugs: contextDrugs.map(d => ({
-            en: d.commercial_name_en,
-            ar: d.commercial_name_ar,
-            sci: d.scientific_name,
-            route: d.route,
-            price: d.price_egp,
-            mfg: d.manufacturer,
-          })),
-        }),
+      const result = await requestAIConsult({
+        prompt: text,
+        contextDrugs: contextDrugs.map(d => ({
+          en: d.commercial_name_en,
+          ar: d.commercial_name_ar,
+          sci: d.scientific_name,
+          route: d.route,
+          price: d.price_egp,
+          mfg: d.manufacturer,
+        })),
       });
 
-      const data = await response.json();
-      const replyText = data.reply || (data.success ? data.reply : (data.message || 'عذراً، يرجى إعادة المحاولة.'));
+      const replyText = result.reply || 'عذراً، يرجى إعادة المحاولة.';
 
       setMessages(prev => [
         ...prev,
@@ -112,7 +129,7 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
           timestamp: new Date(),
         }
       ]);
-    } catch (err: any) {
+    } catch {
       setMessages(prev => [
         ...prev,
         {
@@ -146,23 +163,17 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
     setPrescriptionResult(null);
 
     try {
-      const response = await fetch('/api/analyze-prescription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: prescriptionImage,
-          mimeType: 'image/jpeg',
-          textQuery: prescriptionText,
-        }),
+      const result = await requestPrescriptionAnalysis({
+        imageBase64: prescriptionImage || undefined,
+        text: prescriptionText,
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setPrescriptionResult(data.analysis);
+      if (result.success && result.reply) {
+        setPrescriptionResult(result.reply);
       } else {
-        setPrescriptionResult(data.message || 'تعذر فحص الروشتة حالياً.');
+        setPrescriptionResult(result.reply || 'تعذر فحص الروشتة حالياً.');
       }
-    } catch (err: any) {
+    } catch {
       setPrescriptionResult('حدث خطأ أثناء الاتصال بخدمة تحليل الروشتات.');
     } finally {
       setOcrLoading(false);
@@ -187,30 +198,44 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
           </div>
         </div>
 
-        {/* Tab switch */}
-        <div className="flex bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+        {/* Actions: Android Key Setup & Tab Switch */}
+        <div className="flex items-center gap-2">
+          {/* Android Key Modal Button */}
           <button
             type="button"
-            onClick={() => setActiveSubTab('consult')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              activeSubTab === 'consult'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-purple-600'
-            }`}
+            onClick={() => setShowKeyModal(true)}
+            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-purple-600 rounded-xl transition-all text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+            title="إعدادات تشغيل الذكاء الاصطناعي للأندرويد"
           >
-            استشارة دوائية
+            <Smartphone className="w-3.5 h-3.5 text-purple-600" />
+            <span className="hidden sm:inline">تشغيل الأندرويد</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('prescription')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              activeSubTab === 'prescription'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-purple-600'
-            }`}
-          >
-            تحليل وقراءة الروشتة
-          </button>
+
+          {/* Tab switch */}
+          <div className="flex bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('consult')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                activeSubTab === 'consult'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-purple-600'
+              }`}
+            >
+              استشارة دوائية
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('prescription')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                activeSubTab === 'prescription'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-purple-600'
+              }`}
+            >
+              تحليل وقراءة الروشتة
+            </button>
+          </div>
         </div>
       </div>
 
@@ -376,6 +401,83 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Android Key Setup Modal */}
+      {showKeyModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowKeyModal(false)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  تشغيل الذكاء الاصطناعي على تطبيق الأندرويد
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  يعمل التطبيق مباشرة مع خوادم Google AI أو بمفتاح Gemini الخاص بك
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+              <p className="leading-relaxed">
+                ✅ <strong>التشغيل المدمج التلقائي:</strong> عند بناء ملف الـ APK عبر GitHub Actions، يتم ربط التطبيق تلقائياً بالخدمة السحابية.
+              </p>
+              <p className="leading-relaxed">
+                ⚡ <strong>التشغيل المستقل المباشر:</strong> يمكنك أيضاً إدخال مفتاح Gemini API مجاني من Google AI Studio ليعمل الذكاء الاصطناعي مباشرة من هاتفك بسرعة فائقة.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                مفتاح Gemini API (اختياري / Direct Key):
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+              />
+              <p className="text-[11px] text-slate-400">
+                يُحفظ المفتاح محلياً على جهازك فقط (Local Storage) ولا يتم إرساله لأي طرف ثالث.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              >
+                إغلاق
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveApiKey}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+              >
+                {keySavedMessage ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>تم الحفظ بنجاح</span>
+                  </>
+                ) : (
+                  <span>حفظ المفتاح</span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

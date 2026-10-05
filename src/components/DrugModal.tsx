@@ -4,6 +4,7 @@ import { ROUTE_METAS } from '../data/categories';
 import { findAdultMonograph } from '../data/adultMonographs';
 import { AdultMonographView } from './AdultMonographView';
 import { extractIngredientStrengths } from '../utils/drugStrength';
+import { requestAIConsult } from '../utils/aiClient';
 import { 
   X, 
   Check, 
@@ -142,29 +143,24 @@ export const DrugModal: React.FC<DrugModalProps> = ({
 8. التحاليل والمؤشرات المخبرية الواجب مراقبتها سريرياً.
 9. إرشادات الصيدلي لتوعية المريض البالغ في مصر.`;
 
-      const response = await fetch('/api/ai-consult', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          contextDrugs: [
-            {
-              en: target.commercial_name_en,
-              ar: target.commercial_name_ar,
-              sci: target.scientific_name,
-              route: target.route,
-              price: target.price_egp,
-              mfg: target.manufacturer,
-            }
-          ]
-        }),
+      const result = await requestAIConsult({
+        prompt: promptText,
+        contextDrugs: [
+          {
+            en: target.commercial_name_en,
+            ar: target.commercial_name_ar,
+            sci: target.scientific_name,
+            route: target.route,
+            price: target.price_egp,
+            mfg: target.manufacturer,
+          }
+        ]
       });
 
-      const data = await response.json();
-      if (data.success && data.reply) {
-        setAiMonographContent(data.reply);
+      if (result.reply) {
+        setAiMonographContent(result.reply);
       } else {
-        setAiMonographContent(data.reply || data.message || 'تعذر توليد المونوغراف حالياً.');
+        setAiMonographContent('تعذر توليد المونوغراف حالياً.');
       }
     } catch {
       setAiMonographContent('حدث خطأ في الاتصال بالخدمة الذكية.');
@@ -234,54 +230,6 @@ export const DrugModal: React.FC<DrugModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-        </div>
-
-        {/* Tabs Bar on tablets/desktop */}
-        <div className="hidden sm:flex p-2 sm:px-6 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/80 items-center gap-2 overflow-x-auto no-scrollbar">
-          <button
-            type="button"
-            onClick={() => setActiveTab('info')}
-            className={`py-2 px-3.5 text-xs sm:text-sm font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              activeTab === 'info'
-                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-sm border border-slate-300/80 dark:border-slate-700 ring-2 ring-teal-500/20'
-                : 'bg-white/60 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900 border border-transparent'
-            }`}
-          >
-            <Info className="w-4 h-4 text-teal-600" />
-            <span>بيانات واستخدامات الدواء</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('monograph')}
-            className={`py-2 px-3.5 text-xs sm:text-sm font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-              activeTab === 'monograph'
-                ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-500/30 font-black'
-                : 'bg-indigo-50/90 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>دليل الأدوية للبالغين (Adult Monograph)</span>
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${activeTab === 'monograph' ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-200/80 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-200'}`}>
-              دليل سريري
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('equivalents')}
-            className={`py-2 px-3.5 text-xs sm:text-sm font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-              activeTab === 'equivalents'
-                ? 'bg-teal-600 text-white shadow-md ring-2 ring-teal-500/30 font-black'
-                : 'bg-teal-50/90 dark:bg-teal-950/70 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900 border border-teal-200 dark:border-teal-800'
-            }`}
-          >
-            <Repeat className="w-4 h-4" />
-            <span>شريط البدائل والمثائل</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-black ${activeTab === 'equivalents' ? 'bg-teal-700 text-white' : 'bg-teal-200 text-teal-900 dark:bg-teal-900 dark:text-teal-200'}`}>
-              {exactGenerics.length} بديل
-            </span>
-          </button>
         </div>
 
         {/* Modal Body */}
@@ -564,45 +512,55 @@ export const DrugModal: React.FC<DrugModalProps> = ({
           )}
         </div>
 
-        {/* Mobile Android Bottom Tabs (شريط أيقونات سفلي للتنقل بين الدليل والبدائل وبيانات الدواء) */}
-        <div className="flex sm:hidden items-center justify-around p-1 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700/80 shrink-0">
+        {/* شريط الدليل والبدائل كأيقونات أسفل واجهة الأدوية عند فتحها */}
+        <div className="flex items-center justify-around p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800/90 border-t border-slate-200 dark:border-slate-700/80 shrink-0 select-none">
+          {/* بيانات واستخدامات الدواء */}
           <button
             type="button"
             onClick={() => setActiveTab('info')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 ${
               activeTab === 'info'
-                ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-2xs'
-                : 'text-slate-600 dark:text-slate-400'
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs border border-slate-200 dark:border-slate-700 font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Info className="w-3.5 h-3.5 text-teal-600" />
-            <span>البيانات</span>
+            <Info className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+            <span>بيانات الدواء</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('monograph')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'monograph'
-                ? 'bg-indigo-600 text-white shadow-2xs'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>دليل الدواء</span>
-          </button>
-
+          {/* شريط البدائل والمثائل */}
           <button
             type="button"
             onClick={() => setActiveTab('equivalents')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 ${
               activeTab === 'equivalents'
-                ? 'bg-teal-600 text-white shadow-2xs'
-                : 'text-slate-600 dark:text-slate-400'
+                ? 'bg-teal-600 text-white shadow-xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300'
             }`}
           >
-            <Repeat className="w-3.5 h-3.5" />
-            <span>البدائل ({exactGenerics.length})</span>
+            <Repeat className="w-4 h-4 shrink-0" />
+            <span>البدائل والمثائل</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+              activeTab === 'equivalents'
+                ? 'bg-teal-700 text-white'
+                : 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200'
+            }`}>
+              {exactGenerics.length}
+            </span>
+          </button>
+
+          {/* دليل الدواء للبالغين */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('monograph')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-95 ${
+              activeTab === 'monograph'
+                ? 'bg-indigo-600 text-white shadow-xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-indigo-700 dark:hover:text-indigo-300'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span>دليل الدواء (Monograph)</span>
           </button>
         </div>
 
