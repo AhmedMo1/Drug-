@@ -24,6 +24,28 @@ function getAIClient() {
   return new GoogleGenAI({ apiKey });
 }
 
+// Generate with automatic multi-model fallback (gemini-3.8-flash -> gemini-3.1-flash-lite)
+async function generateWithFallback(ai: GoogleGenAI, contents: any): Promise<string> {
+  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+  let lastError: any = null;
+
+  for (const model of models) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+      });
+      if (response && response.text) {
+        return response.text;
+      }
+    } catch (err: any) {
+      console.warn(`[Gemini AI] Model ${model} failed:`, err?.message || err);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('All Gemini model endpoints failed');
+}
+
 // AI Clinical Consultation API
 app.post('/api/ai-consult', async (req, res) => {
   try {
@@ -40,14 +62,19 @@ app.post('/api/ai-consult', async (req, res) => {
 
     const drugContextStr = Array.isArray(contextDrugs) && contextDrugs.length > 0
       ? `\nالأدوية المحددة من قاعدة بيانات الأدوية المصرية:\n` +
-        contextDrugs.map((d: any) => `- الاسم التجاري: ${d.en} (${d.ar || ''}) | المادة الفعالة: ${d.sci || 'غير محدد'} | الشكل: ${d.route || ''} | السعر: ${d.price ? d.price + ' ج.م' : 'غير متوفر'} | الشركة: ${d.mfg || ''}`).join('\n')
+        contextDrugs.map((d: any) => `- الاسم التجاري: ${d.en || d.commercial_name_en || ''} (${d.ar || d.commercial_name_ar || ''}) | المادة الفعالة: ${d.sci || d.scientific_name || 'غير محدد'} | الشكل: ${d.route || ''} | السعر: ${d.price || d.price_egp ? (d.price || d.price_egp) + ' ج.م' : 'غير متوفر'} | الشركة: ${d.mfg || d.manufacturer || ''}`).join('\n')
       : '';
 
-    const systemPrompt = `أنت صيدلي إكلينيكي خبير متخصص في الأدوية المصرية (Egyptian Drug Authority Database).
+    const systemPrompt = `أنت صيدلي إكلينيكي خبير متخصص في الأدوية المصرية (Egyptian Drug Authority Database) والأدلة الإكلينيكية للبالغين (Adult Drug Monographs).
 دورك مساعدة الصيادلة والأطباء والمرضى في مصر بمعلومات دوائية دقيقة وموثوقة باللغة العربية.
-- راعِ دائماً الأمان الدوائي، الجرعات السليمة، والبدائل المتاحة في السوق المصري (المثائل بنفس المادة الفعالة، والبدائل العلاجية).
-- عند السؤال عن التفاعلات، وضّح درجة الخطورة، والتأثير الإكلينيكي، والتوصية الإجرائية (مثل الفصل بساعتين، أو تغيير الدواء).
-- عند السؤال عن الحوامل أو المرضعات أو مرضى الكبد والكلى، اذكر تصنيف الأمان والتحذيرات.
+- راعِ دائماً الأمان الدوائي، الجرعات السليمة للبالغين، والبدائل المتاحة في السوق المصري (المثائل بنفس المادة الفعالة، والبدائل العلاجية).
+- عند السؤال عن مونوغراف دواء معين (Adult Drug Monograph)، قدّم دليلاً منظماً يشمل:
+  1. جرعات البالغين الاعتيادية حسب دواعي الاستعمال مع الحد الأقصى اليومي.
+  2. تعديلات الجرعة في القصور الكلوي (حسب CrCl) والغسيل الكلوي.
+  3. تعديلات الجرعة لمرضى الكبد.
+  4. أمان الحمل (FDA Category) والرضاعة الطبيعية.
+  5. تحذيرات الصندوق الأسود (Black Box Warnings) وموانع الاستعمال.
+  6. التداخلات الدوائية الخطيرة وأهم نصائح الصيدلي للمريض.
 - نسّق إجابتك بنقاط واضحة وتنسيق Markdown جميل وسهل القراءة.
 - أنهِ إجابتك دائماً بتنبيه طبي مختصر بضرورة مراجعة الطبيب المعالج أو الصيدلي المختص.
 ${drugContextStr}
@@ -55,17 +82,24 @@ ${systemContext || ''}
 
 سؤال المستخدم: ${prompt}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: systemPrompt,
-    });
-
-    const reply = response.text || 'عذراً، لم أتمكن من الحصول على إجابة في الوقت الحالي.';
-    return res.json({ success: true, reply });
+    try {
+      const reply = await generateWithFallback(ai, systemPrompt);
+      return res.json({ success: true, reply });
+    } catch (apiError: any) {
+      console.error('Gemini fallback failed:', apiError);
+      return res.status(200).json({
+        success: false,
+        isFallback: true,
+        reply: `⚠️ الخدمة الذكية تواجه ضغطاً مؤقتاً في خوادم Google AI. \nيمكنك مراجعة الدليل الإكلينيكي المدمج، فاحص التفاعلات الدوائية، وحاسبة الجرعات المتاحة فورياً بالتطبيق.`,
+        message: 'تم تفعيل التنبيه البديل نظراً للضغط على الخوادم الخارجية.',
+      });
+    }
   } catch (error: any) {
     console.error('Error in /api/ai-consult:', error);
-    return res.status(500).json({
+    return res.status(200).json({
       success: false,
+      isFallback: true,
+      reply: 'حدث خطأ أثناء معالجة الاستشارة. يرجى إعادة المحاولة.',
       error: error.message || 'حدث خطأ أثناء معالجة الاستشارة الطبية.',
     });
   }
@@ -112,17 +146,24 @@ app.post('/api/analyze-prescription', async (req, res) => {
       return res.status(400).json({ error: 'لم يتم إرسال صورة أو نص للروشتة.' });
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-    });
-
-    const analysis = response.text || 'لم يتم استخراج معلومات من الروشتة.';
-    return res.json({ success: true, analysis });
+    try {
+      const analysis = await generateWithFallback(ai, contents);
+      return res.json({ success: true, analysis });
+    } catch (apiError: any) {
+      console.error('Prescription OCR fallback error:', apiError);
+      return res.status(200).json({
+        success: false,
+        isFallback: true,
+        analysis: 'تعذر الاتصال بخدمة تحليل الصور حالياً بسبب ضغط مؤقت. يمكنك كتابة اسم الدواء في خانة البحث السريع.',
+        message: 'حدث ضغط في خوادم تحليل الصور.',
+      });
+    }
   } catch (error: any) {
     console.error('Error in /api/analyze-prescription:', error);
-    return res.status(500).json({
+    return res.status(200).json({
       success: false,
+      isFallback: true,
+      analysis: 'حدث خطأ أثناء فحص الروشتة.',
       error: error.message || 'حدث خطأ أثناء فحص الروشتة.',
     });
   }

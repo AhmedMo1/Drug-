@@ -299,8 +299,13 @@ export default function App() {
     setSavedDrugIds(new Set());
   }, []);
 
-  // AI Consultation with Drugs
+  // AI Consultation state
+  const [aiPromptToRun, setAiPromptToRun] = useState<string>('');
+  const [aiContextDrugs, setAiContextDrugs] = useState<Drug[]>([]);
+
   const handleConsultAIWithDrugs = useCallback((drugs: Drug[], promptText?: string) => {
+    if (promptText) setAiPromptToRun(promptText);
+    if (drugs && drugs.length > 0) setAiContextDrugs(drugs);
     setActiveTab('ai');
   }, []);
 
@@ -329,8 +334,8 @@ export default function App() {
         isLoadingData={isLoadingData}
       />
 
-      {/* Main Content Area */}
-      <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Content Area - Optimized with safe bottom padding for Android navigation bar */}
+      <main className="grow max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 sm:pt-6 sm:pb-8">
         {dataError ? (
           <div className="bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 p-6 rounded-2xl text-center">
             <AlertCircle className="w-10 h-10 text-rose-600 mx-auto mb-2" />
@@ -346,6 +351,7 @@ export default function App() {
           <>
             {activeTab === 'search' && (
               <SearchDashboard
+                allDrugs={allDrugs}
                 drugs={filteredDrugs}
                 totalMatches={totalMatches}
                 filters={filters}
@@ -366,7 +372,11 @@ export default function App() {
 
             {activeTab === 'monographs' && (
               <AdultMonographsLibrary
-                onConsultAI={(prompt) => {
+                allDrugs={allDrugs}
+                onSelectDrugForDetails={(drug) => handleOpenDetails(drug, 'monograph')}
+                onConsultAI={(prompt, drug) => {
+                  setAiPromptToRun(prompt);
+                  if (drug) setAiContextDrugs([drug]);
                   setActiveTab('ai');
                 }}
               />
@@ -403,7 +413,9 @@ export default function App() {
 
             {activeTab === 'ai' && (
               <AIConsultant
-                contextDrugs={interactionDrugs.length > 0 ? interactionDrugs : (selectedDrug ? [selectedDrug] : [])}
+                contextDrugs={aiContextDrugs.length > 0 ? aiContextDrugs : (interactionDrugs.length > 0 ? interactionDrugs : (selectedDrug ? [selectedDrug] : []))}
+                initialPrompt={aiPromptToRun}
+                onClearInitialPrompt={() => setAiPromptToRun('')}
               />
             )}
 
@@ -454,6 +466,8 @@ export default function App() {
         }}
         onConsultAI={(drug) => {
           setIsModalOpen(false);
+          setAiPromptToRun(`اكتب استشارة إكلينيكية متعمقة ومونوغراف لدواء ${drug.commercial_name_en} (${drug.commercial_name_ar || ''}) تشمل الجرعات، التعديل الكلوي والكبدي، والبدائل المتاحة في مصر.`);
+          setAiContextDrugs([drug]);
           setActiveTab('ai');
         }}
         isInPrescription={selectedDrug ? prescriptionDrugIds.has(selectedDrug.id) : false}

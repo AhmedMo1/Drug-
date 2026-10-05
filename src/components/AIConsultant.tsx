@@ -16,6 +16,8 @@ import {
 
 interface AIConsultantProps {
   contextDrugs?: Drug[];
+  initialPrompt?: string;
+  onClearInitialPrompt?: () => void;
   onSelectDrugFromAnalysis?: (drugName: string) => void;
 }
 
@@ -28,6 +30,8 @@ interface Message {
 
 export const AIConsultant: React.FC<AIConsultantProps> = ({
   contextDrugs = [],
+  initialPrompt,
+  onClearInitialPrompt,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'consult' | 'prescription'>('consult');
   const [inputQuery, setInputQuery] = useState('');
@@ -35,11 +39,19 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
     {
       id: 'welcome',
       sender: 'assistant',
-      text: 'أهلاً بك! أنا المستشار الصيدلاني الإكلينيكي الذكي لدليل الأدوية المصري.\nيمكنك سؤالي عن بدائل الأدوية الناقصة في مصر، أمان الأدوية أثناء الحمل والرضاعة، تعديل الجرعات، التفاعلات الدوائية، أو تعليمات تناول الأدوية مع الطعام.',
+      text: 'أهلاً بك! أنا المستشار الصيدلاني الإكلينيكي الذكي لدليل الأدوية المصري.\nيمكنك سؤالي عن الأدلة الإكلينيكية للبالغين (Adult Monographs)، بدائل الأدوية في مصر، أمان الأدوية أثناء الحمل والرضاعة، تعديل الجرعات لمرضى الكلى والكبد، أو التفاعلات الدوائية.',
       timestamp: new Date(),
     }
   ]);
   const [loading, setLoading] = useState(false);
+
+  // Auto-send initial prompt if routed from Adult Monographs or Drug Modal
+  React.useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      handleSendMessage(initialPrompt.trim());
+      if (onClearInitialPrompt) onClearInitialPrompt();
+    }
+  }, [initialPrompt]);
 
   // Prescription reader state
   const [prescriptionText, setPrescriptionText] = useState('');
@@ -49,11 +61,11 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
 
   // Quick preset questions
   const presetQuestions = [
+    'اكتب لي دليلاً إكلينيكياً (Adult Monograph) لدواء أوجمنتين 1 جم',
     'هل البنادول إكسترا آمن للحامل والمرضع وما هو البديل الأكثر أماناً؟',
-    'ما هي أفضل بدائل أوجمنتين 1 جم المتوفرة بالصيدليات المصرية؟',
-    'ما هي التعليمات الصحيحة لتناول مكملات الحديد والزنك والكالسيوم؟',
-    'كيف نتجنب تعارض السيبروفلوكساسين مع مضادات الحموضة؟',
-    'هل دواء كونكور 5 آمن لمريض السكر والربو؟'
+    'ما هي أفضل بدائل كونكور 5 مجم المتوفرة بالصيدليات المصرية؟',
+    'كيف يتم تعديل جرعة السيبروفلوكساسين لمريض قصور كلوي؟',
+    'ما هي التداخلات الخطيرة بين الميثوتريكسات ومضادات الالتهاب غير الستيرويدية؟'
   ];
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -89,9 +101,7 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
       });
 
       const data = await response.json();
-      const replyText = data.success 
-        ? data.reply 
-        : (data.message || 'عذراً، يرجى التحقق من اتصال الإنترنت أو مفتاح API.');
+      const replyText = data.reply || (data.success ? data.reply : (data.message || 'عذراً، يرجى إعادة المحاولة.'));
 
       setMessages(prev => [
         ...prev,
@@ -108,7 +118,7 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
         {
           id: (Date.now() + 1).toString(),
           sender: 'assistant',
-          text: 'حدث خطأ في الاتصال بخادم الذكاء الاصطناعي. يمكنك استخدام قواعد البيانات الداخلية والتفاعلات التلقائية المحفوظة بالجهاز.',
+          text: 'حدث خطأ في الاتصال بالخدمة الذكية. يمكنك مراجعة الأدلة السريرية المدمجة وقواعد التفاعلات المحفوظة.',
           timestamp: new Date(),
         }
       ]);
