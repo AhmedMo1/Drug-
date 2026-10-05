@@ -55,6 +55,91 @@ export function isStandaloneApp(): boolean {
 }
 
 /**
+ * Check device internet and server connectivity
+ */
+export async function checkNetworkStatus(): Promise<{
+  isOnline: boolean;
+  canReachServer: boolean;
+  canReachGoogleAI: boolean;
+  latencyMs?: number;
+  message: string;
+}> {
+  const isOnlineNav = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  if (!isOnlineNav) {
+    return {
+      isOnline: false,
+      canReachServer: false,
+      canReachGoogleAI: false,
+      message: 'الهاتف في وضع عدم الاتصال (أوفلاين). التطبيق يعمل محلياً بكامل قاعدة البيانات.',
+    };
+  }
+
+  const startTime = Date.now();
+  let canReachGoogleAI = false;
+  let canReachServer = false;
+
+  // 1. Test Google connectivity
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    await fetch('https://www.google.com/generate_204', {
+      method: 'HEAD',
+      mode: 'no-cors',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    canReachGoogleAI = true;
+  } catch {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      await fetch('https://dns.google/resolve?name=google.com', {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      canReachGoogleAI = true;
+    } catch {}
+  }
+
+  // 2. Test server ping on candidate endpoints
+  const testEndpoints = [
+    REMOTE_SERVER_URL,
+    'https://ais-pre-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app',
+    'https://ais-dev-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app'
+  ];
+
+  for (const url of testEndpoints) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${url.replace(/\/$/, '')}/api/ping`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        canReachServer = true;
+        break;
+      }
+    } catch {}
+  }
+
+  const latencyMs = Date.now() - startTime;
+  const isConnected = canReachGoogleAI || canReachServer;
+
+  return {
+    isOnline: isConnected,
+    canReachServer,
+    canReachGoogleAI,
+    latencyMs,
+    message: isConnected
+      ? `متصل بالإنترنت بنجاح (${latencyMs}ms)`
+      : 'تعذر الاتصال بالخوادم الخارجية. التطبيق يعمل في وضع الأوفلاين.',
+  };
+}
+
+/**
  * Execute AI clinical consultation with multi-tier fallback:
  * 1. Local backend endpoint /api/ai-consult (when running in web preview/server)
  * 2. Direct on-device GoogleGenAI call (when running in Android APK)
@@ -134,22 +219,28 @@ ${systemContext || ''}
   }
 
   // 3. Remote Cloud Server Call (fallback for Android APK)
-  try {
-    const remoteUrl = `${REMOTE_SERVER_URL.replace(/\/$/, '')}/api/ai-consult`;
-    const response = await fetch(remoteUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, contextDrugs, systemContext }),
-    });
+  const candidateEndpoints = [
+    REMOTE_SERVER_URL,
+    'https://ais-pre-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app',
+    'https://ais-dev-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app'
+  ];
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.reply) {
-        return { success: true, reply: data.reply, isFallback: data.isFallback };
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const remoteUrl = `${endpoint.replace(/\/$/, '')}/api/ai-consult`;
+      const response = await fetch(remoteUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, contextDrugs, systemContext }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.reply) {
+          return { success: true, reply: data.reply, isFallback: data.isFallback };
+        }
       }
-    }
-  } catch (remoteError) {
-    console.warn('Remote cloud AI consult failed:', remoteError);
+    } catch {}
   }
 
   // 4. On-Device Offline Clinical Intelligence Engine (Works 100% without internet or server on Android)
@@ -240,21 +331,29 @@ export async function requestPrescriptionAnalysis(params: {
   }
 
   // 3. Remote Cloud Server Call
-  try {
-    const remoteUrl = `${REMOTE_SERVER_URL.replace(/\/$/, '')}/api/analyze-prescription`;
-    const response = await fetch(remoteUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, imageBase64 }),
-    });
+  const candidateEndpoints = [
+    REMOTE_SERVER_URL,
+    'https://ais-pre-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app',
+    'https://ais-dev-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app'
+  ];
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.reply) {
-        return { success: true, reply: data.reply };
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const remoteUrl = `${endpoint.replace(/\/$/, '')}/api/analyze-prescription`;
+      const response = await fetch(remoteUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, imageBase64 }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.reply) {
+          return { success: true, reply: data.reply };
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   return {
     success: false,

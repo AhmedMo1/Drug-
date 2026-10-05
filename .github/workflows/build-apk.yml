@@ -39,9 +39,19 @@ jobs:
             "webDir": "dist",
             "bundledWebRuntime": false,
             "server": {
-              "androidScheme": "https",
+              "androidScheme": "http",
               "cleartext": true,
-              "allowNavigation": ["*"]
+              "allowNavigation": [
+                "https://*.run.app",
+                "https://generativelanguage.googleapis.com",
+                "https://*.google.com",
+                "*"
+              ]
+            },
+            "plugins": {
+              "CapacitorHttp": {
+                "enabled": true
+              }
             }
           }
           EOF
@@ -57,13 +67,51 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Configure Android Network Permissions & Properties
+      - name: Configure Android Network Permissions & Security
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx2048m" >> android/gradle.properties
 
-          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml || true
+          # Create network security config allowing all domains & cleartext
+          mkdir -p android/app/src/main/res/xml
+          cat << 'EOF' > android/app/src/main/res/xml/network_security_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true">
+                  <trust-anchors>
+                      <certificates src="system" />
+                      <certificates src="user" />
+                  </trust-anchors>
+              </base-config>
+              <domain-config cleartextTrafficPermitted="true">
+                  <domain includeSubdomains="true">localhost</domain>
+                  <domain includeSubdomains="true">google.com</domain>
+                  <domain includeSubdomains="true">googleapis.com</domain>
+                  <domain includeSubdomains="true">run.app</domain>
+              </domain-config>
+          </network-security-config>
+          EOF
+
+          # Python script to cleanly inject permissions into AndroidManifest.xml
+          python3 -c '
+          with open("android/app/src/main/AndroidManifest.xml", "r") as f:
+              content = f.read()
+
+          perms = """
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+          """
+          if "android.permission.INTERNET" not in content:
+              content = content.replace("<application", perms + "\n    <application")
+
+          if "networkSecurityConfig" not in content:
+              content = content.replace("<application", "<application android:usesCleartextTraffic=\"true\" android:networkSecurityConfig=\"@xml/network_security_config\"")
+
+          with open("android/app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(content)
+          '
 
           cat << 'EOF' >> android/build.gradle
 

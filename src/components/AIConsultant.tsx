@@ -5,7 +5,8 @@ import {
   requestPrescriptionAnalysis, 
   getEffectiveApiKey, 
   saveUserApiKey, 
-  isStandaloneApp 
+  isStandaloneApp,
+  checkNetworkStatus 
 } from '../utils/aiClient';
 import { 
   Bot, 
@@ -21,7 +22,9 @@ import {
   ImageIcon,
   Key,
   Check,
-  Smartphone
+  Smartphone,
+  Wifi,
+  RefreshCw
 } from 'lucide-react';
 
 interface AIConsultantProps {
@@ -71,6 +74,31 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
   const [prescriptionImage, setPrescriptionImage] = useState<string | null>(null);
   const [prescriptionResult, setPrescriptionResult] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [networkTesting, setNetworkTesting] = useState(false);
+  const [networkStatusResult, setNetworkStatusResult] = useState<{
+    isOnline: boolean;
+    canReachServer: boolean;
+    canReachGoogleAI: boolean;
+    latencyMs?: number;
+    message: string;
+  } | null>(null);
+
+  const handleTestConnection = async () => {
+    setNetworkTesting(true);
+    try {
+      const res = await checkNetworkStatus();
+      setNetworkStatusResult(res);
+    } catch {
+      setNetworkStatusResult({
+        isOnline: false,
+        canReachServer: false,
+        canReachGoogleAI: false,
+        message: 'تعذر إجراء فحص الاتصال بالشبكة.',
+      });
+    } finally {
+      setNetworkTesting(false);
+    }
+  };
 
   const handleSaveApiKey = () => {
     saveUserApiKey(apiKeyInput);
@@ -451,6 +479,40 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
               <p className="text-[11px] text-slate-400">
                 يُحفظ المفتاح محلياً على جهازك فقط (Local Storage) ولا يتم إرساله لأي طرف ثالث.
               </p>
+            </div>
+
+            {/* Network Test Card */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Wifi className="w-4 h-4 text-purple-600" />
+                  <span>فحص اتصال الإنترنت والـ AI:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={networkTesting}
+                  className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-800 dark:text-purple-300 rounded-lg text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${networkTesting ? 'animate-spin' : ''}`} />
+                  <span>{networkTesting ? 'جاري الفحص...' : 'فحص الاتصال'}</span>
+                </button>
+              </div>
+
+              {networkStatusResult && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  networkStatusResult.isOnline
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800'
+                    : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  {networkStatusResult.isOnline ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                  <span>{networkStatusResult.message}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-2">

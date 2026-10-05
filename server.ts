@@ -13,7 +13,27 @@ dotenv.config();
 const app = express();
 const port = 3000;
 
+// Enable Full CORS for Android APK, Capacitor, and remote clients
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '15mb' }));
+
+// Health / Connectivity Ping endpoint
+app.get('/api/ping', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    aiReady: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY'
+  });
+});
 
 // Helper to get GoogleGenAI instance safely
 function getAIClient() {
