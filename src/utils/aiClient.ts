@@ -148,9 +148,10 @@ export async function checkNetworkStatus(): Promise<{
 export async function requestAIConsult(params: {
   prompt: string;
   contextDrugs?: any[];
+  allDrugs?: any[];
   systemContext?: string;
 }): Promise<{ success: boolean; reply: string; isFallback?: boolean; error?: string }> {
-  const { prompt, contextDrugs = [], systemContext } = params;
+  const { prompt, contextDrugs = [], allDrugs = [], systemContext } = params;
 
   // 1. Try local Express backend if running in standard web mode
   if (!isStandaloneApp()) {
@@ -218,7 +219,7 @@ ${systemContext || ''}
     }
   }
 
-  // 3. Remote Cloud Server Call (fallback for Android APK)
+  // 3. Remote Cloud Server Call with strict fast timeout (never hang the app)
   const candidateEndpoints = [
     REMOTE_SERVER_URL,
     'https://ais-pre-lzexscqz7742voap242rj7-9845935082.europe-west2.run.app',
@@ -227,12 +228,16 @@ ${systemContext || ''}
 
   for (const endpoint of candidateEndpoints) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s fast timeout
       const remoteUrl = `${endpoint.replace(/\/$/, '')}/api/ai-consult`;
       const response = await fetch(remoteUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, contextDrugs, systemContext }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -243,9 +248,9 @@ ${systemContext || ''}
     } catch {}
   }
 
-  // 4. On-Device Offline Clinical Intelligence Engine (Works 100% without internet or server on Android)
+  // 4. On-Device Offline Clinical Intelligence Engine (Works 100% without internet or server on Android for all 26,562 drugs)
   try {
-    const offlineResult = generateOfflineClinicalConsultation(prompt, contextDrugs);
+    const offlineResult = generateOfflineClinicalConsultation(prompt, contextDrugs, allDrugs);
     if (offlineResult && offlineResult.responseMarkdown) {
       return {
         success: true,
@@ -260,7 +265,7 @@ ${systemContext || ''}
   return {
     success: true,
     isFallback: true,
-    reply: `### 📋 الاستشارة الإكلينيكية المدمجة\n\nتأكد من كتابة اسم الدواء بوضوح (مثال: ميتفورمين، ريفاروكسابان، كونكور، أوجمنتين) أو تحديد الجرعة ووظائف الكلى ($eGFR$) لتوليد التقرير السريري الفوري.`,
+    reply: `### 📋 الاستشارة الإكلينيكية المدمجة\n\nاكتب اسم أي دواء بوضوح من قاعدة الأدوية المصرية (مثل: أوجمنتين، كتافلام، كونكور، بنادول، كونترولوك) لعرض التقرير السريري الفوري.`,
   };
 }
 

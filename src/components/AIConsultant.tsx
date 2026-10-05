@@ -29,6 +29,7 @@ import {
 
 interface AIConsultantProps {
   contextDrugs?: Drug[];
+  allDrugs?: Drug[];
   initialPrompt?: string;
   onClearInitialPrompt?: () => void;
   onSelectDrugFromAnalysis?: (drugName: string) => void;
@@ -43,6 +44,7 @@ interface Message {
 
 export const AIConsultant: React.FC<AIConsultantProps> = ({
   contextDrugs = [],
+  allDrugs = [],
   initialPrompt,
   onClearInitialPrompt,
 }) => {
@@ -143,7 +145,11 @@ export const AIConsultant: React.FC<AIConsultantProps> = ({
           route: d.route,
           price: d.price_egp,
           mfg: d.manufacturer,
+          uses_summary: d.uses_summary,
+          warnings_summary: d.warnings_summary,
+          warnings: d.warnings,
         })),
+        allDrugs,
       });
 
       const replyText = result.reply || 'عذراً، يرجى إعادة المحاولة.';

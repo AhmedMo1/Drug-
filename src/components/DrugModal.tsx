@@ -153,8 +153,12 @@ export const DrugModal: React.FC<DrugModalProps> = ({
             route: target.route,
             price: target.price_egp,
             mfg: target.manufacturer,
+            uses_summary: target.uses_summary,
+            warnings_summary: target.warnings_summary,
+            warnings: target.warnings,
           }
-        ]
+        ],
+        allDrugs: [target]
       });
 
       if (result.reply) {

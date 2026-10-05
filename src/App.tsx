@@ -414,6 +414,7 @@ export default function App() {
             {activeTab === 'ai' && (
               <AIConsultant
                 contextDrugs={aiContextDrugs.length > 0 ? aiContextDrugs : (interactionDrugs.length > 0 ? interactionDrugs : (selectedDrug ? [selectedDrug] : []))}
+                allDrugs={allDrugs}
                 initialPrompt={aiPromptToRun}
                 onClearInitialPrompt={() => setAiPromptToRun('')}
               />
