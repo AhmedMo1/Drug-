@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { generateOfflineClinicalConsultation } from './offlineClinicalEngine';
 
 /**
  * Universal AI client helper that works seamlessly on Web, Android APK (Capacitor),
@@ -151,12 +152,24 @@ ${systemContext || ''}
     console.warn('Remote cloud AI consult failed:', remoteError);
   }
 
-  // 4. Offline Clinical Fallback (Works 100% without internet or server)
+  // 4. On-Device Offline Clinical Intelligence Engine (Works 100% without internet or server on Android)
+  try {
+    const offlineResult = generateOfflineClinicalConsultation(prompt, contextDrugs);
+    if (offlineResult && offlineResult.responseMarkdown) {
+      return {
+        success: true,
+        reply: offlineResult.responseMarkdown,
+        isFallback: true,
+      };
+    }
+  } catch (offlineErr) {
+    console.warn('Offline clinical evaluation error:', offlineErr);
+  }
+
   return {
-    success: false,
+    success: true,
     isFallback: true,
-    reply: `⚠️ الخدمة الذكية تحتاج اتصالاً بالإنترنت أو إدخال مفتاح Gemini API عند تشغيل تطبيق الأندرويد.\n\nيمكنك استخدام قاعدة البيانات الداخلية المدمجة التي تعمل بدون إنترنت للبحث عن الأدوية، شريط البدائل والمثائل، ودليل الأدوية للبالغين، وفحص التفاعلات الدوائية.`,
-    error: 'No active connection or API key available',
+    reply: `### 📋 الاستشارة الإكلينيكية المدمجة\n\nتأكد من كتابة اسم الدواء بوضوح (مثال: ميتفورمين، ريفاروكسابان، كونكور، أوجمنتين) أو تحديد الجرعة ووظائف الكلى ($eGFR$) لتوليد التقرير السريري الفوري.`,
   };
 }
 

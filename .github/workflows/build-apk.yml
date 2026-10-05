@@ -35,9 +35,14 @@ jobs:
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.aistudio.app",
-            "appName": "AI Studio App",
+            "appName": "دليل الأدوية المصري",
             "webDir": "dist",
-            "bundledWebRuntime": false
+            "bundledWebRuntime": false,
+            "server": {
+              "androidScheme": "https",
+              "cleartext": true,
+              "allowNavigation": ["*"]
+            }
           }
           EOF
 
@@ -52,11 +57,13 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Fix Duplicate Kotlin Classes & Configure Properties
+      - name: Configure Android Network Permissions & Properties
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx2048m" >> android/gradle.properties
+
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml || true
 
           cat << 'EOF' >> android/build.gradle
 

@@ -85,6 +85,8 @@ export interface PediatricDrugProfile {
   nameAr: string;
   nameEn: string;
   activeIngredient: string;
+  category?: 'antipyretic' | 'antibiotic' | 'respiratory' | 'antihistamine' | 'gi' | 'vitamins' | 'other';
+  categoryAr?: string;
   commercialExamples: string[];
   concentrationStr: string;
   concentrationMgPerMl: number;
@@ -97,6 +99,7 @@ export interface PediatricDrugProfile {
   maxDailyDoseMgPerKg: number;
   minAgeMonths: number;
   notesAr: string;
+  storageNotes?: string;
   contraindicationsAr: string[];
 }
 
