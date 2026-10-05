@@ -50,11 +50,24 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Configure Android & Gradle Properties
+      - name: Fix Duplicate Kotlin Classes & Configure Properties
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx2048m" >> android/gradle.properties
+
+          cat << 'EOF' >> android/build.gradle
+
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+                  }
+              }
+          }
+          EOF
 
       - name: Build Debug APK
         run: |
