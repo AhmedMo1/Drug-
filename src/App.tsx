@@ -80,8 +80,11 @@ export default function App() {
   // Dark mode
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('egypt_drugs_dark') === 'true' ||
-        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const saved = localStorage.getItem('egypt_drugs_dark');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     } catch {
       return false;
     }
@@ -91,8 +94,12 @@ export default function App() {
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
     try {
       localStorage.setItem('egypt_drugs_dark', isDarkMode ? 'true' : 'false');

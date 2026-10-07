@@ -189,11 +189,23 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               <button
+                type="button"
                 onClick={toggleDarkMode}
-                aria-label="تبديل الوضع الليلي"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-transform"
+                title={isDarkMode ? 'التحويل للوضع النهاري (Light Mode)' : 'التحويل للوضع الليلي (Dark Mode)'}
+                aria-label={isDarkMode ? 'التحويل للوضع النهاري' : 'التحويل للوضع الليلي'}
+                className="h-9 px-2.5 sm:px-3 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-teal-400 dark:hover:border-teal-500 active:scale-95 transition-all shadow-2xs select-none"
               >
-                {isDarkMode ? <Sun className="w-4.5 h-4.5 text-amber-400" /> : <Moon className="w-4.5 h-4.5" />}
+                {isDarkMode ? (
+                  <>
+                    <Sun className="w-4 h-4 text-amber-400 shrink-0 animate-in spin-in-180 duration-300" />
+                    <span className="text-xs font-bold text-amber-500 dark:text-amber-300">نهاري</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0 animate-in spin-in-180 duration-300" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">ليلي</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
